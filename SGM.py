@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
@@ -62,23 +63,6 @@ def A(f, x, h=1e-6) -> float:
     else:
         return (a*b - 1 + np.sqrt(1 + a**2)*np.sqrt(1 + b**2))/(a + b)
 
-# Lemma 4.7
-def Findtheta(f, x, h=1e-6) -> float:
-    r"""
-    The theta which is the angle between the specular tangent line and the phototangent
-
-    [Args]
-        f : `function`
-        x : `float`
-        h : `float`, mesh size
-    """
-    a = alpha(f, x, h=h)
-    b = beta(f, x, h=h)
-
-    if a*b + 1 == 0:
-        return 0.5*(np.pi - np.arctan(a) + np.arctan(b))
-    else:
-        return 0.5*(np.arctan(a) - np.arctan(b))
 
 ########################################################################################################################
 # OPTIMIZATION with the Subgradient Method
@@ -186,6 +170,7 @@ def SGM_with_constant_step_size(objective_function, x_0, gamma=0.005, eta=1e-6, 
         each_point : `list`, points and values at the point for each iteration
         values : `list`, values at each point for each iteration
     """
+    n = 0
     x = x_0
     x_star = x_0  
     subgrad = A(objective_function, x_0, h=h)
@@ -193,8 +178,7 @@ def SGM_with_constant_step_size(objective_function, x_0, gamma=0.005, eta=1e-6, 
     value = objective_function(x)
     each_point = [(x, value)]           # List to store function values and its point at each iteration
     values = [value]                    # List to store function values at each iteration
-
-    n = 1
+    
     while n < N and np.abs(subgrad) > eta:
         x = x - gamma * subgrad
         each_point.append((x, objective_function(x)))               # Store current function values and its point
@@ -225,6 +209,7 @@ def SGM_with_diminishing_step_size(objective_function, x_0, eta=1e-6, h=1e-6, N=
         each_point : `list`, points and values at the point for each iteration
         values : `list`, values at each point for each iteration
     """
+    n = 0
     x = x_0
     x_star = x_0  
     subgrad = A(objective_function, x_0, h=h)
@@ -233,9 +218,8 @@ def SGM_with_diminishing_step_size(objective_function, x_0, eta=1e-6, h=1e-6, N=
     each_point = [(x, value)]           # List to store function values and its point at each iteration
     values = [value]                    # List to store function values at each iteration
 
-    n = 1
     while n < N and np.abs(subgrad) > eta:
-        gamma = 1/n                                                 # the square summable but not summable step rule
+        gamma = 1/(n + 1)                                           # the square summable but not summable step rule
         x = x - gamma * subgrad
         each_point.append((x, objective_function(x)))               # Store current function values and its point
         values.append((objective_function(x)))                      # Store current function values
@@ -267,19 +251,19 @@ def ISGM(objective_function, x_start, x_end, x_0, eta=1e-6, h=1e-6, N=1000) -> t
         each_point : `list`, points and values at the point for each iteration
         values : `list`, values at each point for each iteration
     """
+    n=0
+    
     x = x_0
     x_star = x_0  
-    t = x_end - x_start 
+    t = (x_end - x_start)/2
     a = alpha(objective_function, x, h=h)
     b = beta(objective_function, x, h=h)
-    theta = Findtheta(objective_function, x, h=h)
 
     value = objective_function(x)
     each_point = [(x, value)]           # List to store function values and its point at each iteration
     values = [value]                    # List to store function values at each iteration
     T = [t]
 
-    n = 1
     while n < N and np.abs(a + b) > eta:
         x = x - t * np.sign(a + b)
 
@@ -291,13 +275,7 @@ def ISGM(objective_function, x_start, x_end, x_0, eta=1e-6, h=1e-6, N=1000) -> t
         
         a = alpha(objective_function, x, h=h)
         b = beta(objective_function, x, h=h)
-        
-        if np.pi / 4 <= theta < np.pi / 2:
-            theta = max(theta, Findtheta(objective_function, x, h=h))
-            t = t * np.sin(theta)
-        elif 0 <= theta < np.pi / 4:
-            theta = min(theta, Findtheta(objective_function, x, h=h))
-            t = t / (2 * np.cos(theta))
+        t = t/2
 
         T.append(t)
 
@@ -312,54 +290,56 @@ def ISGM(objective_function, x_start, x_end, x_0, eta=1e-6, h=1e-6, N=1000) -> t
 def OPTIMIZATION(objective_function, x_start, x_end, x_0, gamma=0.005, eta=1e-6, h=1e-6, N=1000) -> tuple:
     method1 = SM_with_constant_step_size(objective_function, x_0=x_0, gamma=gamma, eta=eta, h=h, N=N)
     method2 = SM_with_diminishing_step_size(objective_function, x_0=x_0, eta=eta, h=h, N=N)
-    method3 = SGM_with_constant_step_size(objective_function, x_0=x_0, gamma=gamma, eta=eta, h=h, N=N)
-    method4 = SGM_with_diminishing_step_size(objective_function, x_0=x_0, eta=eta, h=h, N=N)
-    method5 = ISGM(objective_function, x_start=x_start, x_end=x_end, x_0=x_0, eta=eta, h=h, N=N)
+    method3 = ISGM(objective_function, x_start=x_start, x_end=x_end, x_0=x_0, eta=eta, h=h, N=N)
+    # method4 = SGM_with_constant_step_size(objective_function, x_0=x_0, gamma=gamma, eta=eta, h=h, N=N)
+    # method5 = SGM_with_diminishing_step_size(objective_function, x_0=x_0, eta=eta, h=h, N=N)
 
-    return method1, method2, method3, method4, method5
+    return method1, method2, method3
 
 ########################################################################################################################
 # VISUALIZATION
 ########################################################################################################################
 
-def VISUALIZATION(objective_function, x_start, x_end, x_0, gamma=0.005, eta=1e-6, h=1e-6, N=1000, figure_size=(5, 3), filename='filename', legend=True, functionname='f'):
+def VISUALIZATION(objective_function, x_start, x_end, x_0, gamma=0.005, eta=1e-6, h=1e-6, N=1000, figure_size=(5, 3), filename='filename', legend=True, functionname='f', range_of_y=(1e-10, 1e+1+0.1), visualization_skip=False):
 
+    if x_0 == 'random':
+        x_0 = np.random.uniform(x_start, x_end)
+    
+    filename = f'{filename} with initial point {x_0}.png'
     result = OPTIMIZATION(objective_function=objective_function, x_start=x_start, x_end=x_end, x_0=x_0, gamma=gamma, eta=eta, h=h, N=N)
 
-    X = list(range(0, N))
-    
-    H = [h]*N
-    Y1 = result[0][2]
-    X1 = X[:len(Y1)]
-    Y2 = result[1][2]
-    X2 = X[:len(Y2)]
-    Y3 = result[2][2]
-    X3 = X[:len(Y3)]
-    Y4 = result[3][2]
-    X4 = X[:len(Y4)]
-    Y5 = result[4][2]
-    X5 = X[:len(Y5)]
+    if visualization_skip is False:
+        X = list(range(0, N))
+        H = [h]*N
 
-    # Create the plot
-    plt.figure(figsize=figure_size)
-    plt.plot(X, H, label='$h=10^{-6}$', color='red', linestyle='dotted', linewidth=1)
-    plt.plot(X1, Y1, label='SM with $\gamma=0.005$', color='blue', linestyle='dashdot', linewidth=1)          
-    plt.plot(X2, Y2, label='SM with $\gamma_k=\\frac{1}{k}$', color='green', linestyle='dashdot', linewidth=1)
-    # plt.plot(X3, Y3, label='SGM with $\gamma=0.005$', color='blue', linewidth=1)
-    # plt.plot(X4, Y4, label='SGM with $\gamma_k=\\frac{1}{k}$', color='green', linewidth=1)
-    plt.plot(X5, Y5, label='ISGM', color='purple')
-    plt.xlabel('Iteration $k$', fontsize='11')
-    plt.ylabel(f'Value of objective function ${functionname}(x_k)$', fontsize='11')
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='10') if legend is True else None
-    plt.xlim(min(X), max(X))
-    plt.grid(True)
-    plt.yscale('log')  
-    plt.savefig(f'{filename}.png', dpi=1000, bbox_inches='tight')
-    plt.show()
+        # Create the plot
+        plt.figure(figsize=figure_size)
+        plt.plot(X, H, label='$h=10^{-6}$', color='red', linestyle='dotted', linewidth=1)
 
-    return result
+        labels = ['SM with $\gamma=0.005$', 'SM with $\gamma_k=\\frac{1}{k + 1}$', 'ISGM']
+        colors = ['blue', 'green', 'purple']
+
+        linestyles = ['dashdot', 'dashdot', '-']
+
+        for i, (label, color, linestyle) in enumerate(zip(labels, colors, linestyles)):
+            Y = result[i][2]
+            X_method = list(range(len(Y)))
+            plt.plot(X_method, Y, label=label, color=color, linestyle=linestyle, linewidth=1)
+
+        plt.xlabel('Iteration $k$', fontsize='11')
+        plt.ylabel(f'Value of objective function ${functionname}(x_k)$', fontsize='11')
+        plt.xticks(fontsize=10)
+        plt.yticks(fontsize=10)
+        if legend:
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='10')
+        plt.xlim(0, N - 1)
+        plt.ylim(range_of_y[0], range_of_y[1])  
+        plt.grid(True)
+        plt.yscale('log')  
+        plt.savefig(filename, dpi=1000, bbox_inches='tight')
+        plt.show()
+
+    return result, x_0, filename
 
 def combine_images_vertically(image1_path, image2_path, output_path):
     # Open the images
@@ -385,3 +365,41 @@ def combine_images_vertically(image1_path, image2_path, output_path):
 
     # Save the combined image
     combined_image.save(output_path)
+    
+def AVERAGE(objective_function, x_start, x_end, gamma=0.005, eta=1e-6, h=1e-6, N=20, test_points=20):
+    data1 = {}
+    data2 = {}
+    data3 = {}
+
+    results_storage = []
+    x_0_storage = []
+
+    for n in range(test_points):
+        result_zoomed, x_0, filename = VISUALIZATION(objective_function=objective_function, x_start=x_start, x_end=x_end, x_0='random', gamma=gamma, eta=eta, N=N, h=h, visualization_skip=True)
+
+        results_storage.append(result_zoomed)
+        x_0_storage.append(x_0)
+
+        for method in range(5):
+            data1[x_0] = results_storage[n][0][2]
+            data2[x_0] = results_storage[n][1][2]
+            data3[x_0] = results_storage[n][2][2]
+
+    df1 = pd.DataFrame({k: pd.Series(v) for k, v in data2.items()})
+    df2 = pd.DataFrame({k: pd.Series(v) for k, v in data2.items()}) 
+    df3 = pd.DataFrame({k: pd.Series(v) for k, v in data3.items()})
+    
+    df1['Row_Mean'] = df1.mean(axis=1)
+    df2['Row_Mean'] = df2.mean(axis=1)
+    df3['Row_Mean'] = df3.mean(axis=1)
+
+    collected_data = {}
+
+    collected_data["SM constant"] = df1['Row_Mean']
+    collected_data["SM diminishing"] = df2['Row_Mean']
+    collected_data["ISGM"] = df3['Row_Mean']
+
+
+    collected_df = pd.DataFrame(collected_data)
+
+    return collected_df[:N]
